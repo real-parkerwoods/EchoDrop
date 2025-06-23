@@ -10,20 +10,6 @@ namespace EchoDrop
     {
         bool logFilePathChanged = false;
         private double _logFileLoading;
-        public void SetLogFileProgress(double value)
-        {
-            _logFileLoading = value;
-            pbLoadFile.Visible = true;
-            int scaled = (int)(Math.Max(0, Math.Min(1, value)) * 100);
-            if (pbLoadFile.InvokeRequired)
-            {
-                pbLoadFile.Invoke(() => pbLoadFile.Value = scaled);
-            }
-            else
-            {
-                pbLoadFile.Value = scaled;
-            }
-        }
         static List<FileBlock>? loadedFileBlocks = null;
         public MainED()
         {
@@ -74,6 +60,7 @@ namespace EchoDrop
             {
                 var (block, progressBar) = tuple;
                 DecodeFileBlock(block, progressBar);
+                btn.Enabled = false;
             }
         }
         private void btnDecodeAll_Click(object sender, EventArgs e)
@@ -115,7 +102,7 @@ namespace EchoDrop
             Invoke(() =>
             {
                 progressBar.Value = 0;
-                tbStatus.AppendText(Environment.NewLine + ">Decoding " + block.BlockFileName + "." + block.BlockFileExtension + "...");
+                tbStatus.AppendText(Environment.NewLine + ">Decoding " + block.BlockFullFileName + "...");
             });
             Task.Run(() =>
             {
@@ -128,22 +115,15 @@ namespace EchoDrop
                     using var reader = new StreamReader(fs);
                     var outPath = System.IO.Path.GetDirectoryName(block.BlockFilePath) + "\\temp\\";
                     System.IO.Directory.CreateDirectory(outPath);
-                    outPath = outPath + block.BlockFileName + "." + block.BlockFileExtension;
+                    outPath = outPath + block.BlockFullFileName;
                     using var outFile = new FileStream(outPath, FileMode.Create);
                     string? line;
-                    int count = 0;
-                    string test = "";
                     while ((line = reader.ReadLine()) != null)
                     {
                         long lineBytes = reader.CurrentEncoding.GetByteCount(line) + reader.CurrentEncoding.GetByteCount(Environment.NewLine);
                         processedBytes += lineBytes;
                         if (processedBytes > (block.ByteEnd - block.ByteStart)) break;
                         byte[]? decoded = null;
-                        //DEBUG ONLY
-                        if (count <5) Invoke(() => tbStatus.AppendText(Environment.NewLine + ">" + count.ToString() + " LINE:"));
-                        if (count <5) Invoke(() => tbStatus.AppendText(Environment.NewLine + ">" + line));
-                        count++;
-                        //DEBUG ONLY
                         if (block.BlockFileEncoding == "base64" || block.BlockFileEncoding == "openssl")
                         {
                             decoded = decodeBase64(line);
@@ -155,7 +135,6 @@ namespace EchoDrop
                         else
                         {
                             throw new Exception("Unknown File Block Encoding Type " + block.BlockFileEncoding);
-                            //Continue?
                         }
 
 
@@ -167,18 +146,15 @@ namespace EchoDrop
                         else
                         {
                             throw new Exception("Unknown Decoding Error");
-                            //Continue?
                         }
                         int percent = (int)((processedBytes / (double)totalBytes) * 100);
                         Invoke(() => progressBar.Value = Math.Min(percent, 100));
-                        test = line;
                     }
-                    Invoke(() => tbStatus.AppendText(Environment.NewLine + ">" + "LAST:"));
-                    Invoke(() => tbStatus.AppendText(Environment.NewLine + ">" + test));
                     Invoke(() =>
                     {
                         progressBar.Value = 100;
-                        tbStatus.AppendText(Environment.NewLine + ">Done decoding " + block.BlockFileName + "." + block.BlockFileExtension + ".");
+                        tbStatus.AppendText(Environment.NewLine + ">Done decoding " + block.BlockFullFileName + ".");
+                        tbStatus.AppendText(Environment.NewLine + ">Created " + outPath + ".");
                     });
                     fs.Dispose();
                 }
@@ -186,10 +162,10 @@ namespace EchoDrop
                 {
                     Invoke(() =>
                     {
-                        tbStatus.AppendText(Environment.NewLine + ">Failed to decode " + block.BlockFileName + "." + block.BlockFileExtension + ".");
+                        tbStatus.AppendText(Environment.NewLine + ">Failed to decode " + block.BlockFullFileName + ".");
                         tbStatus.AppendText(">>" + ex.Message);
                         progressBar.Value = 0;
-                        progressBar.BackColor = Color.Red;
+                        progressBar.ForeColor = Color.Red;
                     });
                 }
             });
@@ -288,7 +264,7 @@ namespace EchoDrop
                     }
                     else if (currentBlock != null && line.Trim().Equals("CONTENT:", StringComparison.OrdinalIgnoreCase))
                     {
-                        currentBlock.ByteStart = bytePosition + lineLength - reader.CurrentEncoding.GetByteCount(Environment.NewLine);
+                        currentBlock.ByteStart = bytePosition + lineLength;
                     }
                     else if (currentBlock != null && line.Trim().Equals("=== ECHODROP FILE END ===", StringComparison.OrdinalIgnoreCase))
                     {
@@ -296,10 +272,6 @@ namespace EchoDrop
                         currentBlock.EndLine = lineNumber;
                         blocks.Add(currentBlock);
                         currentBlock = null;
-                    }
-                    if (lineNumber % 100 == 0 && totalLines > 0 || totalLines - lineNumber < 100)
-                    {
-                        SetLogFileProgress((double)lineNumber / totalLines);
                     }
                     bytePosition += lineLength;
                 }
@@ -354,7 +326,9 @@ namespace EchoDrop
                         Text = "Decode All",
                         Location = new Point(10, y),
                         Width = 100,
-                        Height = 30
+                        Height = 30,
+                        BackColor = Color.White,
+                        Anchor = AnchorStyles.Left | AnchorStyles.Top
                     };
                     btnDecodeAll.Click += (sender, e) =>
                     {
@@ -376,10 +350,13 @@ namespace EchoDrop
                     // Filename
                     var lblName = new Label
                     {
-                        Text = block.BlockFileName + "." + block.BlockFileExtension,
+                        Text = block.BlockFullFileName,
                         Location = new Point(10, y + 10),
                         Width = 200,
-                        AutoEllipsis = true
+                        AutoEllipsis = true,
+                        ForeColor = Color.White,
+                        BackColor = Color.Transparent,
+                        Anchor = AnchorStyles.Right | AnchorStyles.Left | AnchorStyles.Top
                     };
 
                     // Size
@@ -387,7 +364,10 @@ namespace EchoDrop
                     {
                         Text = block.BlockSize,
                         Location = new Point(220, y + 10),
-                        Width = 80
+                        Width = 80,
+                        ForeColor = Color.White,
+                        BackColor = Color.Transparent,
+                        Anchor = AnchorStyles.Right | AnchorStyles.Top
                     };
 
                     // ProgressBar
@@ -398,7 +378,9 @@ namespace EchoDrop
                         Value = 0,
                         Location = new Point(310, y + 10),
                         Width = 200,
-                        Height = 20
+                        Height = 20,
+                        BackColor = Color.White,
+                        Anchor = AnchorStyles.Top | AnchorStyles.Right
                     };
 
                     // Decode Button
@@ -407,10 +389,11 @@ namespace EchoDrop
                         Text = "Decode",
                         Location = new Point(520, y + 7),
                         Width = 70,
-                        Tag = (block, progressBar)
+                        Tag = (block, progressBar),
+                        BackColor = Color.White,
+                        Anchor = AnchorStyles.Right | AnchorStyles.Top
                     };
                     btnDecode.Click += BtnDecode_Click;
-
                     // Add controls
                     panelFileBlocks.Controls.Add(lblName);
                     panelFileBlocks.Controls.Add(lblSize);
