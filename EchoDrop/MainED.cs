@@ -239,7 +239,7 @@ namespace EchoDrop
                     lineNumber++;
                     long lineStart = bytePosition;
                     long lineLength = reader.CurrentEncoding.GetByteCount(line) + reader.CurrentEncoding.GetByteCount(Environment.NewLine);
-                    if (line.Trim().Equals("=== ECHODROP FILE BEGIN ===", StringComparison.OrdinalIgnoreCase))
+                    if (line.Trim().Equals("{[=== ECHODROP FILE BEGIN ===]}", StringComparison.OrdinalIgnoreCase))
                     {
                         currentBlock = new FileBlock
                         {
@@ -247,26 +247,31 @@ namespace EchoDrop
                             StartLine = lineNumber,
                         };
                     }
-                    else if (currentBlock != null && line.Contains("FILENAME: ", StringComparison.OrdinalIgnoreCase))
+                    else if (currentBlock != null && line.Contains("{[FILENAME: ", StringComparison.OrdinalIgnoreCase))
                     {
                         var parts = line.Split(':', 2);
-                        if (parts.Length == 2) currentBlock.BlockFileName = parts[1].Trim();
+                        if (parts.Length == 2) currentBlock.BlockFileName = parts[1].Trim(']', '}');
                     }
-                    else if (currentBlock != null && line.Contains("EXTENSION: ", StringComparison.OrdinalIgnoreCase))
+                    else if (currentBlock != null && line.Contains("{[EXTENSION: ", StringComparison.OrdinalIgnoreCase))
                     {
                         var parts = line.Split(':', 2);
-                        if (parts.Length == 2) currentBlock.BlockFileExtension = parts[1].Trim();
+                        if (parts.Length == 2) currentBlock.BlockFileExtension = parts[1].Trim(']', '}');
                     }
-                    else if (currentBlock != null && line.Contains("ENCODING: ", StringComparison.OrdinalIgnoreCase))
+                    else if (currentBlock != null && line.Contains("{[ENCODING: ", StringComparison.OrdinalIgnoreCase))
                     {
                         var parts = line.Split(':', 2);
-                        if (parts.Length == 2) currentBlock.BlockFileEncoding = parts[1].Trim();
+                        if (parts.Length == 2) currentBlock.BlockFileEncoding = parts[1].Trim(']', '}');
                     }
-                    else if (currentBlock != null && line.Trim().Equals("CONTENT:", StringComparison.OrdinalIgnoreCase))
+                    else if (currentBlock != null && line.Contains("{[CHECKSUM: ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var parts = line.Split(':', 2);
+                        if (parts.Length == 2) currentBlock.BlockFileEncoding = parts[1].Trim(']','}');
+                    }
+                    else if (currentBlock != null && line.Trim().Equals("{[CONTENT:]}", StringComparison.OrdinalIgnoreCase))
                     {
                         currentBlock.ByteStart = bytePosition + lineLength;
                     }
-                    else if (currentBlock != null && line.Trim().Equals("=== ECHODROP FILE END ===", StringComparison.OrdinalIgnoreCase))
+                    else if (currentBlock != null && line.Trim().Equals("{[=== ECHODROP FILE END ===]}", StringComparison.OrdinalIgnoreCase))
                     {
                         currentBlock.ByteEnd = lineStart;
                         currentBlock.EndLine = lineNumber;

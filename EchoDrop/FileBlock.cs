@@ -11,6 +11,7 @@ namespace EchoDrop
         public string BlockFileExtension = string.Empty;
         public string BlockFileEncoding = string.Empty;
         public string BlockFilePath = string.Empty;
+        public string BlockFileChecksum = string.Empty;
         public string BlockFullFileName { get
             {
                 if (!string.IsNullOrEmpty(BlockFileExtension))
