@@ -11,6 +11,9 @@ namespace EchoDrop
         bool logFilePathChanged = false;
         private double _logFileLoading;
         static List<FileBlock>? loadedFileBlocks = null;
+        string? localNewLine = null;
+        readonly string newLineDelim = "{[";
+
         public MainED()
         {
             InitializeComponent();
@@ -37,10 +40,11 @@ namespace EchoDrop
         private void btnLoadFile_Click(object sender, EventArgs e)
         {
             loadedFileBlocks = null;
+            localNewLine = DetectLineEnding(tbFileLocation.Text);
             List<FileBlock> fileBlocks = FindFileBlocks(tbFileLocation.Text);
-            if (fileBlocks.Count == 0) tbStatus.Text += Environment.NewLine + ">No file blocks found in log file.";
-            if (fileBlocks.Count == 1) tbStatus.Text += Environment.NewLine + ">" + fileBlocks.Count.ToString() + " file block found in log file.";
-            else if (fileBlocks.Count > 1) tbStatus.Text += Environment.NewLine + ">" + fileBlocks.Count.ToString() + " file blocks found in log file.";
+            if (fileBlocks.Count == 0) tbStatus.AppendText(Environment.NewLine + ">No file blocks found in log file.");
+            if (fileBlocks.Count == 1) tbStatus.AppendText(Environment.NewLine + ">" + fileBlocks.Count.ToString() + " file block found in log file.");
+            else if (fileBlocks.Count > 1) tbStatus.AppendText(Environment.NewLine + ">" + fileBlocks.Count.ToString() + " file blocks found in log file.");
             if (fileBlocks.Count > 0)
             {
                 loadedFileBlocks = fileBlocks;
@@ -49,7 +53,7 @@ namespace EchoDrop
                 {
                     totalFileSize += (block.ByteEnd - block.ByteStart);
                 }
-                tbStatus.Text += Environment.NewLine + ">Total block size: " + FormatByteSize(totalFileSize);
+                tbStatus.AppendText(Environment.NewLine + ">Total block size: " + FormatByteSize(totalFileSize));
                 DisplayFileBlocks();
             }
             btnLoadFile.Enabled = false;
@@ -82,17 +86,35 @@ namespace EchoDrop
             });
         }
 
+
+        private string DetectLineEnding(string filePath)
+        {
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+
+            int prevByte = -1;
+            int currByte;
+            while ((currByte = fs.ReadByte()) != -1)
+            {
+                if (prevByte == '\r' && currByte == '\n') return "\r\n";
+                if (currByte == '\n') return "\n";
+                if (currByte == '\r') return "\r";
+                prevByte = currByte;
+            }
+
+            return Environment.NewLine;
+        }
         private void logFilePathChangedAction()
         {
-            tbStatus.Text += Environment.NewLine + ">Log file path changed.";
             if (File.Exists(tbFileLocation.Text))
             {
-                tbStatus.Text += Environment.NewLine + ">Good file path detected.";
+                tbStatus.AppendText(Environment.NewLine + ">Good file path detected.");
+                tbFileLocation.BackColor = Color.White;
                 btnLoadFile.Enabled = true;
             }
             else
             {
-                tbStatus.Text += Environment.NewLine + ">Bad file path detected.";
+                tbStatus.AppendText(Environment.NewLine + ">Bad file path detected.");
+                tbFileLocation.BackColor = Color.Red;
                 btnLoadFile.Enabled = false;
             }
             logFilePathChanged = false;
@@ -163,7 +185,7 @@ namespace EchoDrop
                     Invoke(() =>
                     {
                         tbStatus.AppendText(Environment.NewLine + ">Failed to decode " + block.BlockFullFileName + ".");
-                        tbStatus.AppendText(">>" + ex.Message);
+                        tbStatus.AppendText(Environment.NewLine + ">>" + ex.Message);
                         progressBar.Value = 0;
                         progressBar.ForeColor = Color.Red;
                     });
@@ -205,20 +227,42 @@ namespace EchoDrop
         public long CountLines(string filePath)
         {
             long lineCount = 0;
-            const int bufferSize = 1024 * 1024; // 1 MB buffer
-
+            const int bufferSize = 1024 * 1024;
             using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
             byte[] buffer = new byte[bufferSize];
             int bytesRead;
-
-            while ((bytesRead = fs.Read(buffer, 0, buffer.Length)) > 0)
+            if (localNewLine == "\n")
             {
-                for (int i = 0; i < bytesRead; i++)
+                while ((bytesRead = fs.Read(buffer, 0, buffer.Length)) > 0)
                 {
-                    if (buffer[i] == '\n') lineCount++;
+                    for (int i = 0; i < bytesRead; i++)
+                    {
+                        if (buffer[i] == (byte)'\n') lineCount++;
+                    }
                 }
             }
-            fs.Dispose();
+            else if (localNewLine == "\r\n")
+            {
+                int prev = -1;
+                while ((bytesRead = fs.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    for (int i = 0; i < bytesRead; i++)
+                    {
+                        if (prev == '\r' && buffer[i] == '\n') lineCount++;
+                        prev = buffer[i];
+                    }
+                }
+            }
+            else if (localNewLine == "\r")
+            {
+                while ((bytesRead = fs.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    for (int i = 0; i < bytesRead; i++)
+                    {
+                        if (buffer[i] == (byte)'\r') lineCount++;
+                    }
+                }
+            }
             return lineCount;
         }
         public List<FileBlock> FindFileBlocks(string filePath)
@@ -236,54 +280,57 @@ namespace EchoDrop
                 string? line;
                 while ((line = reader.ReadLine()) != null)
                 {
-                    lineNumber++;
-                    long lineStart = bytePosition;
-                    long lineLength = reader.CurrentEncoding.GetByteCount(line) + reader.CurrentEncoding.GetByteCount(Environment.NewLine);
-                    if (line.Trim().Equals("{[=== ECHODROP FILE BEGIN ===]}", StringComparison.OrdinalIgnoreCase))
+                    if (line.StartsWith(newLineDelim))
                     {
-                        currentBlock = new FileBlock
+                        lineNumber++;
+                        long lineStart = bytePosition;
+                        long lineLength = reader.CurrentEncoding.GetByteCount(line) + reader.CurrentEncoding.GetByteCount(Environment.NewLine);
+                        if (line.Trim().Equals(newLineDelim + "=== ECHODROP FILE BEGIN ===", StringComparison.OrdinalIgnoreCase))
                         {
-                            BlockFilePath = filePath,
-                            StartLine = lineNumber,
-                        };
+                            currentBlock = new FileBlock
+                            {
+                                BlockFilePath = filePath,
+                                StartLine = lineNumber,
+                            };
+                        }
+                        else if (currentBlock != null && line.Contains(newLineDelim + "FILENAME: ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var parts = line.Split(':', 2);
+                            if (parts.Length == 2) currentBlock.BlockFileName = parts[1].Trim();
+                        }
+                        else if (currentBlock != null && line.Contains(newLineDelim + "EXTENSION: ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var parts = line.Split(':', 2);
+                            if (parts.Length == 2) currentBlock.BlockFileExtension = parts[1].Trim();
+                        }
+                        else if (currentBlock != null && line.Contains(newLineDelim + "ENCODING: ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var parts = line.Split(':', 2);
+                            if (parts.Length == 2) currentBlock.BlockFileEncoding = parts[1].Trim();
+                        }
+                        else if (currentBlock != null && line.Contains(newLineDelim + "CHECKSUM: ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var parts = line.Split(':', 2);
+                            if (parts.Length == 2) currentBlock.BlockFileChecksum = parts[1].Trim();
+                        }
+                        else if (currentBlock != null && line.Trim().Equals(newLineDelim + "CONTENT:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            currentBlock.ByteStart = bytePosition + lineLength;
+                        }
+                        else if (currentBlock != null && line.Trim().Equals(newLineDelim + "=== ECHODROP FILE END ===", StringComparison.OrdinalIgnoreCase))
+                        {
+                            currentBlock.ByteEnd = lineStart;
+                            currentBlock.EndLine = lineNumber;
+                            blocks.Add(currentBlock);
+                            currentBlock = null;
+                        }
+                        bytePosition += lineLength;
                     }
-                    else if (currentBlock != null && line.Contains("{[FILENAME: ", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var parts = line.Split(':', 2);
-                        if (parts.Length == 2) currentBlock.BlockFileName = parts[1].Trim(']', '}');
-                    }
-                    else if (currentBlock != null && line.Contains("{[EXTENSION: ", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var parts = line.Split(':', 2);
-                        if (parts.Length == 2) currentBlock.BlockFileExtension = parts[1].Trim(']', '}');
-                    }
-                    else if (currentBlock != null && line.Contains("{[ENCODING: ", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var parts = line.Split(':', 2);
-                        if (parts.Length == 2) currentBlock.BlockFileEncoding = parts[1].Trim(']', '}');
-                    }
-                    else if (currentBlock != null && line.Contains("{[CHECKSUM: ", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var parts = line.Split(':', 2);
-                        if (parts.Length == 2) currentBlock.BlockFileEncoding = parts[1].Trim(']','}');
-                    }
-                    else if (currentBlock != null && line.Trim().Equals("{[CONTENT:]}", StringComparison.OrdinalIgnoreCase))
-                    {
-                        currentBlock.ByteStart = bytePosition + lineLength;
-                    }
-                    else if (currentBlock != null && line.Trim().Equals("{[=== ECHODROP FILE END ===]}", StringComparison.OrdinalIgnoreCase))
-                    {
-                        currentBlock.ByteEnd = lineStart;
-                        currentBlock.EndLine = lineNumber;
-                        blocks.Add(currentBlock);
-                        currentBlock = null;
-                    }
-                    bytePosition += lineLength;
                 }
             }
             catch (Exception ex)
             {
-                tbStatus.Text += Environment.NewLine + ">[ERROR] " + ex.Message;
+                tbStatus.AppendText(Environment.NewLine + ">[ERROR] " + ex.Message);
             }
             return blocks;
         }
