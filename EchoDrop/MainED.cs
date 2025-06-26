@@ -1,4 +1,6 @@
+using System.Diagnostics.Metrics;
 using System.DirectoryServices.ActiveDirectory;
+using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Forms;
 using static EchoDrop.FileBlock;
@@ -8,16 +10,19 @@ namespace EchoDrop
 {
     public partial class MainED : Form
     {
+        //Runtime Vars
         bool logFilePathChanged = false;
         private double _logFileLoading;
         static List<FileBlock>? loadedFileBlocks = null;
         string? localNewLine = null;
-        readonly string newLineDelim = "{[";
+        readonly string newLineDelim = "~>";
+        readonly string echoDropOutDirectory = "EchoDrop Output";
 
         public MainED()
         {
             InitializeComponent();
         }
+        //Direct Control Functions
         private void btnSelectFile_Click(object sender, EventArgs e)
         {
             OpenFileDialog dlg = new OpenFileDialog();
@@ -85,26 +90,10 @@ namespace EchoDrop
                 }
             });
         }
-
-
-        private string DetectLineEnding(string filePath)
-        {
-            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-
-            int prevByte = -1;
-            int currByte;
-            while ((currByte = fs.ReadByte()) != -1)
-            {
-                if (prevByte == '\r' && currByte == '\n') return "\r\n";
-                if (currByte == '\n') return "\n";
-                if (currByte == '\r') return "\r";
-                prevByte = currByte;
-            }
-
-            return Environment.NewLine;
-        }
+        //Specific Design Methods
         private void logFilePathChangedAction()
         {
+            panelFileBlocks.Controls.Clear();
             if (File.Exists(tbFileLocation.Text))
             {
                 tbStatus.AppendText(Environment.NewLine + ">Good file path detected.");
@@ -126,59 +115,88 @@ namespace EchoDrop
                 progressBar.Value = 0;
                 tbStatus.AppendText(Environment.NewLine + ">Decoding " + block.BlockFullFileName + "...");
             });
+
             Task.Run(() =>
             {
                 try
                 {
-                    long totalBytes = block.ByteEnd - block.ByteStart;
-                    long processedBytes = 0;
                     using var fs = new FileStream(block.BlockFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
                     fs.Seek(block.ByteStart, SeekOrigin.Begin);
                     using var reader = new StreamReader(fs);
-                    var outPath = System.IO.Path.GetDirectoryName(block.BlockFilePath) + "\\temp\\";
-                    System.IO.Directory.CreateDirectory(outPath);
-                    outPath = outPath + block.BlockFullFileName;
+                    string outDir = Path.Combine(Path.GetDirectoryName(block.BlockFilePath)!, echoDropOutDirectory);
+                    string outPath;
+                    int dirSuffix = 1;
+                    while (Directory.Exists(outDir))
+                    {
+                        outDir = Path.Combine(Path.GetDirectoryName(block.BlockFilePath)!, $"{echoDropOutDirectory}_{dirSuffix++}");
+                    }
+                    Directory.CreateDirectory(outDir);
+                    outPath = Path.Combine(outDir, block.BlockFullFileName);
                     using var outFile = new FileStream(outPath, FileMode.Create);
                     string? line;
+                    long decodedBytes = 0;
+                    //debug
+                    int whilecount = 0;
+                    //debug
                     while ((line = reader.ReadLine()) != null)
                     {
-                        long lineBytes = reader.CurrentEncoding.GetByteCount(line) + reader.CurrentEncoding.GetByteCount(Environment.NewLine);
-                        processedBytes += lineBytes;
-                        if (processedBytes > (block.ByteEnd - block.ByteStart)) break;
-                        byte[]? decoded = null;
-                        if (block.BlockFileEncoding == "base64" || block.BlockFileEncoding == "openssl")
-                        {
-                            decoded = decodeBase64(line);
-                        }
-                        else if (block.BlockFileEncoding == "uuencode")
-                        {
-                            decoded = decodeUUEncode(line);
-                        }
-                        else
-                        {
-                            throw new Exception("Unknown File Block Encoding Type " + block.BlockFileEncoding);
-                        }
+                        if (fs.Position > block.ByteEnd) break;
 
+                        line = line.TrimStart();
+                        if (!line.StartsWith(newLineDelim)) continue;
+                        line = line.Substring(newLineDelim.Length).Trim();
+                        //debug
+                        if (whilecount < 3)
+                        {
+                            Invoke(() =>
+                            {
+                                tbStatus.AppendText(Environment.NewLine + ">>>Line #" + whilecount.ToString() + ": " + line);
+                            });
+                        }
+                        whilecount++;
+                        //debug
+                        byte[]? decoded = block.BlockFileEncoding switch
+                        {
+                            "base64" or "openssl" => decodeBase64(line),
+                            "uuencode" => decodeUUEncode(line),
+                            _ => throw new Exception("Unknown File Block Encoding Type \"" + block.BlockFileEncoding + "\".")
+                        };
 
                         if (decoded != null)
                         {
                             outFile.Write(decoded, 0, decoded.Length);
-                            decoded = null;
+                            decodedBytes += decoded.Length;
                         }
                         else
                         {
-                            throw new Exception("Unknown Decoding Error");
+                            throw new Exception("Unknown decoding error.");
                         }
-                        int percent = (int)((processedBytes / (double)totalBytes) * 100);
+
+                        int percent = (int)((decodedBytes / (double)(block.ByteEnd - block.ByteStart)) * 100);
                         Invoke(() => progressBar.Value = Math.Min(percent, 100));
                     }
-                    Invoke(() =>
-                    {
-                        progressBar.Value = 100;
-                        tbStatus.AppendText(Environment.NewLine + ">Done decoding " + block.BlockFullFileName + ".");
-                        tbStatus.AppendText(Environment.NewLine + ">Created " + outPath + ".");
-                    });
-                    fs.Dispose();
+                        Invoke(() =>
+                        {
+                            progressBar.Value = 100;
+                            tbStatus.AppendText(Environment.NewLine + ">Done decoding " + block.BlockFullFileName + ".");
+                            tbStatus.AppendText(Environment.NewLine + ">Created " + outPath + ".");
+                        });
+                        reader.Dispose();
+                        fs.Dispose();
+                        outFile.Dispose();
+                        if (!string.IsNullOrEmpty(block.BlockFileChecksum) && System.IO.File.Exists(outPath))
+                        {
+                            string calculated = ComputeFileChecksum(outPath);
+                            if (calculated == block.BlockFileChecksum.ToLowerInvariant())
+                            {
+                                Invoke(() => tbStatus.AppendText(Environment.NewLine + ">Checksum verified."));
+                            }
+                            else
+                            {
+                                //System.IO.File.Delete(outPath);
+                                throw new Exception("Checksum mismatch. Bad file created (" + calculated + "::" + block.BlockFileChecksum + "). Removing File.");
+                            }
+                        }
                 }
                 catch (Exception ex)
                 {
@@ -191,79 +209,6 @@ namespace EchoDrop
                     });
                 }
             });
-        }
-        private byte[] decodeBase64(string line)
-        {
-            try
-            {
-                return Convert.FromBase64String(line);
-            }
-            catch
-            {
-                
-                return Array.Empty<byte>();
-            }
-        }
-        private byte[] decodeUUEncode(string line)
-        {
-            if (string.IsNullOrEmpty(line)) return Array.Empty<byte>();
-            line = line.Trim();
-            int len = (line[0] - 32) & 0x3F;
-            var result = new List<byte>(len);
-            int i = 1;
-            while (i + 3 < line.Length)
-            {
-                byte a = (byte)((line[i] - 32) & 0x3F);
-                byte b = (byte)((line[i + 1] - 32) & 0x3F);
-                byte c = (byte)((line[i + 2] - 32) & 0x3F);
-                byte d = (byte)((line[i + 3] - 32) & 0x3F);
-                result.Add((byte)((a << 2) | (b >> 4)));
-                if (result.Count < len) result.Add((byte)(((b & 0x0F) << 4) | (c >> 2)));
-                if (result.Count < len) result.Add((byte)(((c & 0x03) << 6) | d));
-                i += 4;
-            }
-            return result.ToArray();
-        }
-        public long CountLines(string filePath)
-        {
-            long lineCount = 0;
-            const int bufferSize = 1024 * 1024;
-            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            byte[] buffer = new byte[bufferSize];
-            int bytesRead;
-            if (localNewLine == "\n")
-            {
-                while ((bytesRead = fs.Read(buffer, 0, buffer.Length)) > 0)
-                {
-                    for (int i = 0; i < bytesRead; i++)
-                    {
-                        if (buffer[i] == (byte)'\n') lineCount++;
-                    }
-                }
-            }
-            else if (localNewLine == "\r\n")
-            {
-                int prev = -1;
-                while ((bytesRead = fs.Read(buffer, 0, buffer.Length)) > 0)
-                {
-                    for (int i = 0; i < bytesRead; i++)
-                    {
-                        if (prev == '\r' && buffer[i] == '\n') lineCount++;
-                        prev = buffer[i];
-                    }
-                }
-            }
-            else if (localNewLine == "\r")
-            {
-                while ((bytesRead = fs.Read(buffer, 0, buffer.Length)) > 0)
-                {
-                    for (int i = 0; i < bytesRead; i++)
-                    {
-                        if (buffer[i] == (byte)'\r') lineCount++;
-                    }
-                }
-            }
-            return lineCount;
         }
         public List<FileBlock> FindFileBlocks(string filePath)
         {
@@ -278,54 +223,66 @@ namespace EchoDrop
                 long bytePosition = 0;
                 FileBlock? currentBlock = null;
                 string? line;
+                bool contentStart = false;
                 while ((line = reader.ReadLine()) != null)
                 {
-                    if (line.StartsWith(newLineDelim))
+                    long lineStart = bytePosition;
+                    long lineLength = reader.CurrentEncoding.GetByteCount(line) + reader.CurrentEncoding.GetByteCount(localNewLine);
+
+                    // Only operate on lines with the delim
+                    if (!line.StartsWith(newLineDelim))
                     {
-                        lineNumber++;
-                        long lineStart = bytePosition;
-                        long lineLength = reader.CurrentEncoding.GetByteCount(line) + reader.CurrentEncoding.GetByteCount(Environment.NewLine);
-                        if (line.Trim().Equals(newLineDelim + "=== ECHODROP FILE BEGIN ===", StringComparison.OrdinalIgnoreCase))
-                        {
-                            currentBlock = new FileBlock
-                            {
-                                BlockFilePath = filePath,
-                                StartLine = lineNumber,
-                            };
-                        }
-                        else if (currentBlock != null && line.Contains(newLineDelim + "FILENAME: ", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var parts = line.Split(':', 2);
-                            if (parts.Length == 2) currentBlock.BlockFileName = parts[1].Trim();
-                        }
-                        else if (currentBlock != null && line.Contains(newLineDelim + "EXTENSION: ", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var parts = line.Split(':', 2);
-                            if (parts.Length == 2) currentBlock.BlockFileExtension = parts[1].Trim();
-                        }
-                        else if (currentBlock != null && line.Contains(newLineDelim + "ENCODING: ", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var parts = line.Split(':', 2);
-                            if (parts.Length == 2) currentBlock.BlockFileEncoding = parts[1].Trim();
-                        }
-                        else if (currentBlock != null && line.Contains(newLineDelim + "CHECKSUM: ", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var parts = line.Split(':', 2);
-                            if (parts.Length == 2) currentBlock.BlockFileChecksum = parts[1].Trim();
-                        }
-                        else if (currentBlock != null && line.Trim().Equals(newLineDelim + "CONTENT:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            currentBlock.ByteStart = bytePosition + lineLength;
-                        }
-                        else if (currentBlock != null && line.Trim().Equals(newLineDelim + "=== ECHODROP FILE END ===", StringComparison.OrdinalIgnoreCase))
-                        {
-                            currentBlock.ByteEnd = lineStart;
-                            currentBlock.EndLine = lineNumber;
-                            blocks.Add(currentBlock);
-                            currentBlock = null;
-                        }
                         bytePosition += lineLength;
+                        continue;
                     }
+                    if (contentStart == true) currentBlock.ByteStart = bytePosition;
+                    lineNumber++;
+
+                    // Strip the delim so comparisons are simpler
+                    string payload = line.Substring(newLineDelim.Length).Trim();
+
+                    if (payload.Equals("=== ECHODROP FILE BEGIN ===", StringComparison.OrdinalIgnoreCase))
+                    {
+                        currentBlock = new FileBlock
+                        {
+                            BlockFilePath = filePath,
+                            StartLine = lineNumber
+                        };
+                        contentStart = false;
+                    }
+                    else if (currentBlock != null && payload.StartsWith("FILENAME:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var parts = payload.Split(':', 2);
+                        if (parts.Length == 2) currentBlock.BlockFileName = parts[1].Trim();
+                    }
+                    else if (currentBlock != null && payload.StartsWith("EXTENSION:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var parts = payload.Split(':', 2);
+                        if (parts.Length == 2) currentBlock.BlockFileExtension = parts[1].Trim();
+                    }
+                    else if (currentBlock != null && payload.StartsWith("ENCODING:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var parts = payload.Split(':', 2);
+                        if (parts.Length == 2) currentBlock.BlockFileEncoding = parts[1].Trim();
+                    }
+                    else if (currentBlock != null && payload.StartsWith("CHECKSUM:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var parts = payload.Split(':', 2);
+                        if (parts.Length == 2) currentBlock.BlockFileChecksum = parts[1].Trim();
+                    }
+                    else if (currentBlock != null && payload.Equals("CONTENT:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        contentStart = true;
+                    }
+                    else if (currentBlock != null && payload.Equals("=== ECHODROP FILE END ===", StringComparison.OrdinalIgnoreCase))
+                    {
+                        currentBlock.ByteEnd = lineStart;
+                        currentBlock.EndLine = lineNumber;
+                        blocks.Add(currentBlock);
+                        currentBlock = null;
+                    }
+
+                    bytePosition += lineLength;
                 }
             }
             catch (Exception ex)
@@ -333,18 +290,6 @@ namespace EchoDrop
                 tbStatus.AppendText(Environment.NewLine + ">[ERROR] " + ex.Message);
             }
             return blocks;
-        }
-        public static string FormatByteSize(long bytes)
-        {
-            string[] sizes = { "B", "KB", "MB", "GB", "TB" };
-            double len = bytes;
-            int order = 0;
-            while (len >= 1024 && order < sizes.Length - 1)
-            {
-                order++;
-                len = len / 1024;
-            }
-            return len.ToString("0.##") + " " + sizes[order];
         }
         public void DisplayFileBlocks()
         {
@@ -455,6 +400,89 @@ namespace EchoDrop
                     y += rowHeight + spacing;
                 }
             }
+        }
+        //General Use Methods
+        private byte[] decodeBase64(string line)
+        {
+            try
+            {
+                return Convert.FromBase64String(line);
+            }
+            catch
+            {
+
+                return Array.Empty<byte>();
+            }
+        }
+        private byte[] decodeUUEncode(string line)
+        {
+            if (string.IsNullOrEmpty(line)) return Array.Empty<byte>();
+            line = line.Trim();
+            int len = (line[0] - 32) & 0x3F;
+            var result = new List<byte>(len);
+            int i = 1;
+            while (i + 3 < line.Length)
+            {
+                byte a = (byte)((line[i] - 32) & 0x3F);
+                byte b = (byte)((line[i + 1] - 32) & 0x3F);
+                byte c = (byte)((line[i + 2] - 32) & 0x3F);
+                byte d = (byte)((line[i + 3] - 32) & 0x3F);
+                result.Add((byte)((a << 2) | (b >> 4)));
+                if (result.Count < len) result.Add((byte)(((b & 0x0F) << 4) | (c >> 2)));
+                if (result.Count < len) result.Add((byte)(((c & 0x03) << 6) | d));
+                i += 4;
+            }
+            return result.ToArray();
+        }
+        private string DetectLineEnding(string filePath)
+        {
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+
+            int prevByte = -1;
+            int currByte;
+            while ((currByte = fs.ReadByte()) != -1)
+            {
+                if (prevByte == '\r' && currByte == '\n') return "\r\n";
+                if (currByte == '\n') return "\n";
+                if (currByte == '\r') return "\r";
+                prevByte = currByte;
+            }
+
+            return Environment.NewLine;
+        }
+        public static string FormatByteSize(long bytes)
+        {
+            string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+            double len = bytes;
+            int order = 0;
+            while (len >= 1024 && order < sizes.Length - 1)
+            {
+                order++;
+                len = len / 1024;
+            }
+            return len.ToString("0.##") + " " + sizes[order];
+        }
+        public long CountLines(string filePath)
+        {
+            long lineCount = 0;
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var reader = new StreamReader(fs);
+
+            string? line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                if (line.StartsWith(newLineDelim))
+                    lineCount++;
+            }
+            fs.Dispose();
+            return lineCount;
+        }
+        public static string ComputeFileChecksum(string filePath, string algorithm = "SHA256")
+        {
+            using var sha256 = SHA256.Create();
+            using var stream = File.OpenRead(filePath);
+            byte[] hash = sha256.ComputeHash(stream);
+            return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
         }
     }
 }
