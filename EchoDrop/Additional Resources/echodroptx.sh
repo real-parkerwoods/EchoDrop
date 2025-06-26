@@ -121,6 +121,11 @@ if [ "$archive_file" = "true" ]; then
 else
     checksum=$(sha256sum "$to_encode" | awk '{ print $1 }')
 fi
+if [ "$archive_file" = "true" ]; then
+    filesize=$(ls -l "$tmp_file" | awk '{print $5}')
+else
+    filesize=$(ls -l "$to_encode" | awk '{print $5}')
+fi
 
 # Display instructions
 echo
@@ -135,6 +140,7 @@ echo "${delimiter}=== ECHODROP FILE BEGIN ==="
 echo "${delimiter}FILENAME: $file_name"
 echo "${delimiter}EXTENSION: $file_ext"
 echo "${delimiter}ENCODING: $ENCODER_CMD"
+echo "${delimiter}FILESIZE: $filesize"
 echo "${delimiter}CHECKSUM: $checksum"
 echo "${delimiter}CONTENT:"
 
