@@ -69,8 +69,6 @@ while true; do
 
     if [ ! -e "$input_path" ]; then
         echo "Error: Path not found or invalid characters."
-        echo "Press [Enter] to try again or Ctrl+C to cancel."
-        read dummy
     else
         break
     fi
@@ -134,20 +132,13 @@ else
     filesize=$(ls -l "$to_encode" | awk '{print $5}')
 fi
 
-# Display instructions
-echo
-echo "Before continuing:"
-echo "   → ENABLE logging (Session > Logging > 'All session output' in PuTTY)"
-echo
-read -p "When ready, press any key to continue..." _
-echo
-
 # File header
 echo "${delimiter}=== ECHODROP FILE BEGIN ==="
 echo "${delimiter}FILENAME: $file_name"
 echo "${delimiter}EXTENSION: $file_ext"
 echo "${delimiter}ENCODING: $ENCODER_CMD"
 echo "${delimiter}FILESIZE: $filesize"
+echo "${delimiter}COMPRESSED: $archive_file"
 echo "${delimiter}CHECKSUM: $checksum"
 echo "${delimiter}CONTENT:"
 

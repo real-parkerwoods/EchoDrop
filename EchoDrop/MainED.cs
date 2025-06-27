@@ -1,11 +1,13 @@
 using System.Diagnostics.Metrics;
 using System.DirectoryServices.ActiveDirectory;
+using System.Formats.Tar;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Forms;
 using static EchoDrop.FileBlock;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
+using System.IO.Compression;
 
 namespace EchoDrop
 {
@@ -128,8 +130,10 @@ namespace EchoDrop
 
             try
             {
-                using var outFile = File.Create(saveBash.FileName);
-                resStream.CopyTo(outFile);
+                using var reader = new StreamReader(resStream);
+                string content = reader.ReadToEnd();
+                content = content.Replace("\r\n", "\n").Replace("\r", "\n");
+                File.WriteAllText(saveBash.FileName, content, new UTF8Encoding(false));
             }
             catch (Exception ex)
             {
@@ -245,7 +249,25 @@ namespace EchoDrop
                         Invoke(() => tbStatus.AppendText(Environment.NewLine + ">Checksum verified."));
                         checksumVerified = true;
                     }
-
+                    if (block.BlockFileCompressed)
+                    {
+                        string tmpPath = Path.Combine(Path.GetDirectoryName(outPath), Path.GetFileNameWithoutExtension(outPath));
+                        try
+                        {
+                            Directory.CreateDirectory(tmpPath);
+                            TarFile.ExtractToDirectory(outPath, tmpPath, true);
+                        }
+                        catch
+                        {
+                            throw new Exception("Could not decompress directory.");
+                        }
+                        if (Path.Exists(tmpPath))
+                        {
+                            outPath = tmpPath;
+                            Invoke(() => tbStatus.AppendText(Environment.NewLine + ">Successfully Unpacked Directory."));
+                            File.Delete(outPath + ".tar");
+                        }
+                    }
                     if (checksumVerified)
                     {
                         Invoke(() => tbStatus.AppendText(Environment.NewLine + ">Successfully Created " + outPath + "."));
@@ -309,6 +331,11 @@ namespace EchoDrop
                             currentBlock._BlockFileSize = fileSize;
                         }
                     }
+                    else if (currentBlock != null && payload.StartsWith("COMPRESSED:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string tmp = payload.Split(':', 2)[1].Trim();
+                        currentBlock.BlockFileCompressed = bool.Parse(tmp);
+                    }
                     else if (currentBlock != null && payload.StartsWith("CHECKSUM:", StringComparison.OrdinalIgnoreCase))
                     {
                         currentBlock.BlockFileChecksum = payload.Split(':', 2)[1].Trim();
@@ -339,7 +366,6 @@ namespace EchoDrop
             }
             return blocks;
         }
-
         public void DisplayFileBlocks()
         {
             if (loadedFileBlocks != null)

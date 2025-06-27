@@ -13,6 +13,7 @@ namespace EchoDrop
                 return FormatByteSize(_BlockFileSize);
             }
         }
+        public bool BlockFileCompressed { get; set; }
         public string BlockFileName = string.Empty;
         public string BlockFileExtension = string.Empty;
         public string BlockFileEncoding = string.Empty;
