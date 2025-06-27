@@ -1,5 +1,6 @@
 using System.Diagnostics.Metrics;
 using System.DirectoryServices.ActiveDirectory;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Forms;
@@ -13,10 +14,12 @@ namespace EchoDrop
         //Runtime Vars
         bool logFilePathChanged = false;
         List<FileBlock>? loadedFileBlocks = null;
-        readonly string newLineDelim = "~>";
+
         readonly string echoDropOutDirectory = "EchoDrop Output";
         static string outputDirectory = string.Empty;
         private static readonly object decodeLock = new object();
+        //Static Vars
+        public static string newLineDelim = "~>";
         public MainED()
         {
             InitializeComponent();
@@ -93,6 +96,56 @@ namespace EchoDrop
                     DecodeFileBlock(block, progressBar);
                 }
             });
+        }
+        private void msMainGenerateBash_Click(object sender, EventArgs e)
+        {
+            using var saveBash = new SaveFileDialog()
+            {
+                Title = "Save Bash Script As…",
+                Filter = "Bash script|*.sh",
+                DefaultExt = "sh",
+                AddExtension = true,
+                FileName = "echodroptx.sh"
+            };
+
+            if (saveBash.ShowDialog() != DialogResult.OK)
+                return;
+
+            var asm = Assembly.GetExecutingAssembly();
+            string resourceName = "EchoDrop.AdditionalResources.echodroptx.sh";
+            using Stream? resStream = asm.GetManifestResourceStream(resourceName);
+
+            if (resStream == null)
+            {
+                MessageBox.Show(
+                    $"Internal error: resource '{resourceName}' not found.",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+                return;
+            }
+
+            try
+            {
+                using var outFile = File.Create(saveBash.FileName);
+                resStream.CopyTo(outFile);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Failed to write script:\n{ex.Message}",
+                    "Error Saving File",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+        }
+        private void msMainSettings_Click(object sender, EventArgs e)
+        {
+            using var dlg = new Settings();
+            dlg.StartPosition = FormStartPosition.CenterParent;
+            dlg.ShowDialog(this);
         }
         //Specific Design Methods
         private void logFilePathChangedAction()

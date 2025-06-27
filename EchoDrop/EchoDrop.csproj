@@ -9,6 +9,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="AdditionalResources\EchoDrop - Icon.ico" />
+    <None Remove="AdditionalResources\EchoDrop - Logo.png" />
+    <None Remove="AdditionalResources\echodroptx.sh" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="AdditionalResources\EchoDrop - Icon.ico" />
+    <EmbeddedResource Include="AdditionalResources\EchoDrop - Logo.png" />
+    <EmbeddedResource Include="AdditionalResources\echodroptx.sh" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Update="Properties\Resources.Designer.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>

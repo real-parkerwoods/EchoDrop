@@ -1,59 +1,66 @@
 #!/bin/bash
 cat << "END"
-
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@ ________           __                  _______                                @
-@|        \         |  \                |       \                               @
-@| $$$$$$$$ _______ | $$____    ______  | $$$$$$$\  ______    ______    ______  @
-@| $$__    /       \| $$    \  /      \ | $$  | $$ /      \  /      \  /      \ @
-@| $$  \  |  $$$$$$$| $$$$$$$\|  $$$$$$\| $$  | $$|  $$$$$$\|  $$$$$$\|  $$$$$$\@
-@| $$$$$  | $$      | $$  | $$| $$  | $$| $$  | $$| $$   \$$| $$  | $$| $$  | $$@
-@| $$_____| $$_____ | $$  | $$| $$__/ $$| $$__/ $$| $$      | $$__/ $$| $$__/ $$@
-@| $$     \\$$     \| $$  | $$ \$$    $$| $$    $$| $$       \$$    $$| $$    $$@
-@ \$$$$$$$$ \$$$$$$$ \$$   \$$  \$$$$$$  \$$$$$$$  \$$        \$$$$$$ | $$$$$$$ @
-@                                                                     | $$      @
-@                                                                     | $$      @
-@                                                                      \$$      @
-@                                                 ________  __    __            @
-@                                                |        \|  \  |  \           @
-@                                                 \$$$$$$$$| $$  | $$           @
-@                                                   | $$    \$$\/  $$           @
-@                                                   | $$     >$$  $$            @
-@                                                   | $$    /  $$$$\            @
-@                                                   | $$   |  $$ \$$\           @
-@                                                   | $$   | $$  | $$           @
-@                                                    \$$    \$$   \$$           @
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
+##################################################################
+# ______  ______  __  __  ______  _____   ______  ______  ______ #
+#/\  ___\/\  ___\/\ \_\ \/\  __ \/\  __-./\  == \/\  __ \/\  == \#
+#\ \  __\\ \ \___\ \  __ \ \ \/\ \ \ \/\ \ \  __<\ \ \/\ \ \  _-/#
+# \ \_____\ \_____\ \_\ \_\ \_____\ \____-\ \_\ \_\ \_____\ \_\  #
+#  \/_____/\/_____/\/_/\/_/\/_____/\/____/ \/_/ /_/\/_____/\/_/  #
+#                                                                #
+#          ______ __  __                                         #
+#         /\__  _/\_\_\_\          By PW                         #
+#         \/_/\ \\/_/\_\/_                                       #
+#            \ \_\ /\_\/\_\                                      #
+#             \/_/ \/_/\/_/                                      #
+##################################################################
 END
-delimiter=""
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [-d DELIMITER] FILE
 
+Options:
+  -d DELIMITER   Specify newline delimiter string.
+  -h             Show this help message.
+
+Example:
+  $(basename "$0") -d "~>" myfile.txt
+EOF
+}
+delimiter=""
 # Parse flags
-while getopts ":d:" opt; do
+while getopts ":d:h" opt; do
   case $opt in
     d)
       if [ -z "$OPTARG" ]; then
         echo "Error: -d requires a non-empty argument"
-        exit 1
+        usage
+        return 1 2>/dev/null || exit 1
       fi
       delimiter="$OPTARG"
       ;;
+    h)
+      usage
+      return 0 2>/dev/null || exit 0
+      ;;
     \?)
       echo "Invalid option: -$OPTARG"
-      exit 1
+      usage
+      return 1 2>/dev/null || exit 1
       ;;
     :)
       echo "Option -$OPTARG requires an argument"
-      exit 1
+      usage
+      return 1 2>/dev/null || exit 1
       ;;
   esac
 done
-shift $((OPTIND -1))
+
+shift $((OPTIND - 1))
 
 # Prompt until valid file or directory path is entered
 while true; do
     if [ -z "$1" ]; then
-        echo "Enter path to the file or directory you want to send:"
+        echo "Enter path to the file or directory you want to capture:"
         read -r -p "> " input_path
     else
         input_path="$1"
@@ -99,7 +106,7 @@ fi
 if [ ! -f "$to_encode" ]; then
     echo "[ERROR] Could not locate or prepare file for encoding."
     [ -n "$tmp_file" ] && rm -f "$tmp_file"
-    exit 1
+    return 1 2>/dev/null || exit 1
 fi
 
 # Pick encoder
@@ -112,7 +119,7 @@ elif command -v uuencode >/dev/null 2>&1; then
 else
     echo "[ERROR] No encoder found (base64, openssl, uuencode)."
     [ -n "$tmp_file" ] && rm -f "$tmp_file"
-    exit 1
+    return 1 2>/dev/null || exit 1
 fi
 
 # Get checksum
