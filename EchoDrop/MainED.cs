@@ -16,62 +16,18 @@ namespace EchoDrop
         //Runtime Vars
         bool logFilePathChanged = false;
         List<FileBlock>? loadedFileBlocks = null;
-
-        readonly string echoDropOutDirectory = "EchoDrop Output";
-        static string outputDirectory = string.Empty;
+        string consoleFilePath = string.Empty;
+        readonly string outputDirectoryName = "EchoDrop Session Output";
         private static readonly object decodeLock = new object();
         //Static Vars
         public static string newLineDelim = "~>";
+        public static string outputDirectory = string.Empty;
         public MainED()
         {
             InitializeComponent();
+            getDefaultDirectory();
         }
         //Direct Control Functions
-        private void btnSelectFile_Click(object sender, EventArgs e)
-        {
-            OpenFileDialog dlg = new OpenFileDialog();
-            dlg.Filter = "All Files (*.*)|*.*";
-            dlg.Title = "Console Log Selection";
-            if (dlg.ShowDialog() == DialogResult.OK)
-            {
-                tbFileLocation.Text = dlg.FileName;
-                logFilePathChangedAction();
-            }
-        }
-        private void tbFileLocation_TextChanged(object sender, EventArgs e)
-        {
-            logFilePathChanged = true;
-        }
-        private void tbFileLocation_Leave(object sender, EventArgs e)
-        {
-            if (logFilePathChanged) logFilePathChangedAction();
-        }
-        private void btnLoadFile_Click(object sender, EventArgs e)
-        {
-            loadedFileBlocks = null;
-            List<FileBlock> fileBlocks = FindFileBlocks(tbFileLocation.Text);
-            if (fileBlocks.Count == 0) tbStatus.AppendText(Environment.NewLine + ">No file blocks found in log file.");
-            if (fileBlocks.Count == 1) tbStatus.AppendText(Environment.NewLine + ">" + fileBlocks.Count.ToString() + " file block found in log file.");
-            else if (fileBlocks.Count > 1) tbStatus.AppendText(Environment.NewLine + ">" + fileBlocks.Count.ToString() + " file blocks found in log file.");
-            if (fileBlocks.Count > 0)
-            {
-                loadedFileBlocks = fileBlocks;
-                long totalFileSize = 0;
-                foreach (FileBlock block in fileBlocks)
-                {
-                    totalFileSize += block._BlockFileSize;
-                }
-                tbStatus.AppendText(Environment.NewLine + ">Total block size: " + FormatByteSize(totalFileSize));
-                DisplayFileBlocks();
-            }
-            btnLoadFile.Enabled = false;
-            string outputDirectoryName = echoDropOutDirectory + " - " + Path.GetFileNameWithoutExtension(tbFileLocation.Text);
-            outputDirectory = Path.Combine(Path.GetDirectoryName(tbFileLocation.Text)!, outputDirectoryName);
-            int dirSuffix = 1;
-            while (Directory.Exists(outputDirectory))
-                outputDirectory = Path.Combine(Path.GetDirectoryName(tbFileLocation.Text)!, $"{outputDirectoryName}_{dirSuffix++}");
-            Directory.CreateDirectory(outputDirectory);
-        }
         private void BtnDecode_Click(object? sender, EventArgs e)
         {
             if (sender is System.Windows.Forms.Button btn && btn.Tag is ValueTuple<FileBlock, System.Windows.Forms.ProgressBar> tuple)
@@ -151,21 +107,30 @@ namespace EchoDrop
             dlg.StartPosition = FormStartPosition.CenterParent;
             dlg.ShowDialog(this);
         }
+        private void selectConsoleLogToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            OpenFileDialog dlg = new OpenFileDialog();
+            dlg.Filter = "All Files (*.*)|*.*";
+            dlg.Title = "Console Log Selection";
+            if (dlg.ShowDialog() == DialogResult.OK)
+            {
+                consoleFilePath = dlg.FileName;
+                logFilePathChangedAction();
+                LoadFile();
+            }
+            dlg.Dispose();
+        }
         //Specific Design Methods
         private void logFilePathChangedAction()
         {
             panelFileBlocks.Controls.Clear();
-            if (File.Exists(tbFileLocation.Text))
+            if (File.Exists(consoleFilePath))
             {
                 tbStatus.AppendText(Environment.NewLine + ">Good file path detected.");
-                tbFileLocation.BackColor = Color.White;
-                btnLoadFile.Enabled = true;
             }
             else
             {
                 tbStatus.AppendText(Environment.NewLine + ">Bad file path detected.");
-                tbFileLocation.BackColor = Color.Red;
-                btnLoadFile.Enabled = false;
             }
             logFilePathChanged = false;
         }
@@ -189,7 +154,10 @@ namespace EchoDrop
 
             try
             {
+                Directory.CreateDirectory(outputDirectory);
                 string outPath = Path.Combine(outputDirectory, block.BlockFullFileName);
+                int fileNameDelim = 1;
+                while (File.Exists(outPath)) outPath = Path.Combine(outputDirectory, (block.BlockFileName + "_" + fileNameDelim++.ToString() + "." + block.BlockFileExtension));
                 using var fs = new FileStream(block.BlockFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
                 using var reader = new StreamReader(fs);
                 using var outFile = new FileStream(outPath, FileMode.Create);
@@ -213,23 +181,14 @@ namespace EchoDrop
                             "uuencode" => decodeUUEncode(trimmedLine),
                             _ => throw new Exception("Unknown File Block Encoding Type \"" + block.BlockFileEncoding + "\".")
                         };
-
-                        if (decoded != null)
-                        {
-                            outFile.Write(decoded, 0, decoded.Length);
-                        }
-                        else
-                        {
-                            throw new Exception("Unknown decoding error.");
-                        }
-
+                        if (decoded != null) outFile.Write(decoded, 0, decoded.Length);
+                        else throw new Exception("Unknown decoding error.");
                         int percent = (int)((lineIndex / (double)(block.ContentEndLine - block.ContentStartLine)) * 100);
                         Invoke(() => progressBar.Value = Math.Min(percent, 100));
                         lineIndex++;
                     }
                     currentLine++;
-                    if (currentLine >= block.ContentEndLine)
-                        break;
+                    if (currentLine >= block.ContentEndLine) break;
                 }
 
                 Invoke(() =>
@@ -244,28 +203,26 @@ namespace EchoDrop
                 if (!string.IsNullOrEmpty(block.BlockFileChecksum) && File.Exists(outPath))
                 {
                     string calculated = ComputeFileChecksum(outPath);
-                    if (calculated == block.BlockFileChecksum.ToLowerInvariant())
-                    {
-                        Invoke(() => tbStatus.AppendText(Environment.NewLine + ">Checksum verified."));
-                        checksumVerified = true;
-                    }
+                    if (calculated == block.BlockFileChecksum.ToLowerInvariant()) checksumVerified = true;
+                    string tmpFileName = Path.GetFileName(outPath);
                     if (block.BlockFileCompressed)
                     {
-                        string tmpPath = Path.Combine(Path.GetDirectoryName(outPath), Path.GetFileNameWithoutExtension(outPath));
+                        string tmpPath = Path.GetDirectoryName(outPath);
                         try
                         {
-                            Directory.CreateDirectory(tmpPath);
-                            TarFile.ExtractToDirectory(outPath, tmpPath, true);
+                            Directory.CreateDirectory(Path.GetDirectoryName(outPath));
+                            TarFile.ExtractToDirectory(outPath, Path.GetDirectoryName(outPath), true);
                         }
                         catch
                         {
                             throw new Exception("Could not decompress directory.");
                         }
-                        if (Path.Exists(tmpPath))
+                        if (Path.Exists(Path.GetDirectoryName(outPath)))
                         {
-                            outPath = tmpPath;
                             Invoke(() => tbStatus.AppendText(Environment.NewLine + ">Successfully Unpacked Directory."));
-                            File.Delete(outPath + ".tar");
+                            File.Delete(outPath);
+                            outPath = Path.Combine(Path.GetDirectoryName(outPath), Path.GetFileNameWithoutExtension(outPath));
+
                         }
                     }
                     if (checksumVerified)
@@ -366,6 +323,16 @@ namespace EchoDrop
             }
             return blocks;
         }
+        public void getDefaultDirectory()
+        {
+            string decodedFilesDir = "Decoded Files";
+            string programDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            //Directory.CreateDirectory(Path.Combine(programDirectory, decodedFilesDir));
+            outputDirectory = Path.Combine(programDirectory, decodedFilesDir, outputDirectoryName);
+            int dirSuffix = 1;
+            while (Directory.Exists(outputDirectory)) outputDirectory = Path.Combine(programDirectory, decodedFilesDir, outputDirectoryName + "_" + dirSuffix++);
+            //Directory.CreateDirectory(outputDirectory);
+        }
         public void DisplayFileBlocks()
         {
             if (loadedFileBlocks != null)
@@ -420,9 +387,11 @@ namespace EchoDrop
                 foreach (var block in loadedFileBlocks)
                 {
                     // Filename
+                    string tmpName = block.BlockFullFileName;
+                    if (block.BlockFileCompressed) tmpName = "\\" + block.BlockFileName + "\\";
                     var lblName = new Label
                     {
-                        Text = block.BlockFullFileName,
+                        Text = tmpName,
                         Location = new Point(10, y + 10),
                         Width = 200,
                         AutoEllipsis = true,
@@ -474,6 +443,25 @@ namespace EchoDrop
 
                     y += rowHeight + spacing;
                 }
+            }
+        }
+        public void LoadFile()
+        {
+            loadedFileBlocks = null;
+            List<FileBlock> fileBlocks = FindFileBlocks(consoleFilePath);
+            if (fileBlocks.Count == 0) tbStatus.AppendText(Environment.NewLine + ">No file blocks found in log file.");
+            if (fileBlocks.Count == 1) tbStatus.AppendText(Environment.NewLine + ">" + fileBlocks.Count.ToString() + " file block found in log file.");
+            else if (fileBlocks.Count > 1) tbStatus.AppendText(Environment.NewLine + ">" + fileBlocks.Count.ToString() + " file blocks found in log file.");
+            if (fileBlocks.Count > 0)
+            {
+                loadedFileBlocks = fileBlocks;
+                long totalFileSize = 0;
+                foreach (FileBlock block in fileBlocks)
+                {
+                    totalFileSize += block._BlockFileSize;
+                }
+                tbStatus.AppendText(Environment.NewLine + ">Sum block size: " + FormatByteSize(totalFileSize));
+                DisplayFileBlocks();
             }
         }
         //General Use Methods

@@ -30,14 +30,13 @@
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainED));
             tbStatus = new TextBox();
-            tbFileLocation = new TextBox();
-            btnSelectFile = new Button();
-            btnLoadFile = new Button();
             panelFileBlocks = new Panel();
             msMain = new MenuStrip();
             fileToolStripMenuItem = new ToolStripMenuItem();
-            msMainGenerateBash = new ToolStripMenuItem();
             msMainSettings = new ToolStripMenuItem();
+            toolStripSeparator1 = new ToolStripSeparator();
+            msMainGenerateBash = new ToolStripMenuItem();
+            selectConsoleLogToolStripMenuItem = new ToolStripMenuItem();
             msMain.SuspendLayout();
             SuspendLayout();
             // 
@@ -56,40 +55,6 @@
             tbStatus.TabStop = false;
             tbStatus.Text = ">Welcome to EchoDrop. Please select a console log.";
             // 
-            // tbFileLocation
-            // 
-            tbFileLocation.AllowDrop = true;
-            tbFileLocation.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            tbFileLocation.Location = new Point(12, 28);
-            tbFileLocation.Name = "tbFileLocation";
-            tbFileLocation.Size = new Size(485, 23);
-            tbFileLocation.TabIndex = 1;
-            tbFileLocation.TextChanged += tbFileLocation_TextChanged;
-            tbFileLocation.Leave += tbFileLocation_Leave;
-            // 
-            // btnSelectFile
-            // 
-            btnSelectFile.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnSelectFile.Location = new Point(503, 28);
-            btnSelectFile.Name = "btnSelectFile";
-            btnSelectFile.Size = new Size(61, 23);
-            btnSelectFile.TabIndex = 2;
-            btnSelectFile.Text = "Browse";
-            btnSelectFile.UseVisualStyleBackColor = true;
-            btnSelectFile.Click += btnSelectFile_Click;
-            // 
-            // btnLoadFile
-            // 
-            btnLoadFile.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnLoadFile.Enabled = false;
-            btnLoadFile.Location = new Point(570, 29);
-            btnLoadFile.Name = "btnLoadFile";
-            btnLoadFile.Size = new Size(75, 22);
-            btnLoadFile.TabIndex = 3;
-            btnLoadFile.Text = "Load File";
-            btnLoadFile.UseVisualStyleBackColor = true;
-            btnLoadFile.Click += btnLoadFile_Click;
-            // 
             // panelFileBlocks
             // 
             panelFileBlocks.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
@@ -97,9 +62,9 @@
             panelFileBlocks.BackColor = SystemColors.ActiveCaptionText;
             panelFileBlocks.BackgroundImage = (Image)resources.GetObject("panelFileBlocks.BackgroundImage");
             panelFileBlocks.BackgroundImageLayout = ImageLayout.Zoom;
-            panelFileBlocks.Location = new Point(12, 57);
+            panelFileBlocks.Location = new Point(12, 29);
             panelFileBlocks.Name = "panelFileBlocks";
-            panelFileBlocks.Size = new Size(633, 352);
+            panelFileBlocks.Size = new Size(633, 380);
             panelFileBlocks.TabIndex = 0;
             // 
             // msMain
@@ -112,17 +77,10 @@
             // 
             // fileToolStripMenuItem
             // 
-            fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { msMainGenerateBash, msMainSettings });
+            fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { msMainSettings, toolStripSeparator1, msMainGenerateBash, selectConsoleLogToolStripMenuItem });
             fileToolStripMenuItem.Name = "fileToolStripMenuItem";
             fileToolStripMenuItem.Size = new Size(37, 20);
             fileToolStripMenuItem.Text = "File";
-            // 
-            // msMainGenerateBash
-            // 
-            msMainGenerateBash.Name = "msMainGenerateBash";
-            msMainGenerateBash.Size = new Size(180, 22);
-            msMainGenerateBash.Text = "Generate Linux Bash";
-            msMainGenerateBash.Click += msMainGenerateBash_Click;
             // 
             // msMainSettings
             // 
@@ -131,16 +89,31 @@
             msMainSettings.Text = "Settings Menu";
             msMainSettings.Click += msMainSettings_Click;
             // 
+            // toolStripSeparator1
+            // 
+            toolStripSeparator1.Name = "toolStripSeparator1";
+            toolStripSeparator1.Size = new Size(177, 6);
+            // 
+            // msMainGenerateBash
+            // 
+            msMainGenerateBash.Name = "msMainGenerateBash";
+            msMainGenerateBash.Size = new Size(180, 22);
+            msMainGenerateBash.Text = "Generate Linux Bash";
+            msMainGenerateBash.Click += msMainGenerateBash_Click;
+            // 
+            // selectConsoleLogToolStripMenuItem
+            // 
+            selectConsoleLogToolStripMenuItem.Name = "selectConsoleLogToolStripMenuItem";
+            selectConsoleLogToolStripMenuItem.Size = new Size(180, 22);
+            selectConsoleLogToolStripMenuItem.Text = "Select Console Log";
+            selectConsoleLogToolStripMenuItem.Click += selectConsoleLogToolStripMenuItem_Click;
+            // 
             // MainED
             // 
-            AcceptButton = btnLoadFile;
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1036, 420);
             Controls.Add(panelFileBlocks);
-            Controls.Add(btnLoadFile);
-            Controls.Add(btnSelectFile);
-            Controls.Add(tbFileLocation);
             Controls.Add(tbStatus);
             Controls.Add(msMain);
             Icon = (Icon)resources.GetObject("$this.Icon");
@@ -158,13 +131,12 @@
         #endregion
 
         private TextBox tbStatus;
-        private TextBox tbFileLocation;
-        private Button btnSelectFile;
-        private Button btnLoadFile;
         private Panel panelFileBlocks;
         private MenuStrip msMain;
         private ToolStripMenuItem fileToolStripMenuItem;
         private ToolStripMenuItem msMainGenerateBash;
         private ToolStripMenuItem msMainSettings;
+        private ToolStripSeparator toolStripSeparator1;
+        private ToolStripMenuItem selectConsoleLogToolStripMenuItem;
     }
 }
