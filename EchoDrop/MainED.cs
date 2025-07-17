@@ -24,8 +24,16 @@ namespace EchoDrop
         public static string outputDirectory = string.Empty;
         public MainED()
         {
-            InitializeComponent();
-            getDefaultDirectory();
+            try
+            {
+                InitializeComponent();
+                getDefaultDirectory();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Constructor crash:\n" + ex, "Startup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
         }
         //Direct Control Functions
         private void BtnDecode_Click(object? sender, EventArgs e)
@@ -69,38 +77,25 @@ namespace EchoDrop
             if (saveBash.ShowDialog() != DialogResult.OK)
                 return;
 
-            var asm = Assembly.GetExecutingAssembly();
-            string resourceName = "EchoDrop.AdditionalResources.echodroptx.sh";
-            using Stream? resStream = asm.GetManifestResourceStream(resourceName);
-
-            if (resStream == null)
-            {
-                MessageBox.Show(
-                    $"Internal error: resource '{resourceName}' not found.",
-                    "Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
-                return;
-            }
-
             try
             {
-                using var reader = new StreamReader(resStream);
-                string content = reader.ReadToEnd();
-                content = content.Replace("\r\n", "\n").Replace("\r", "\n");
+                byte[] scriptBytes = Properties.Resources.echodroptx;
+                string content = Encoding.UTF8.GetString(scriptBytes)
+                                    .Replace("\r\n", "\n")
+                                    .Replace("\r", "\n");
+
                 File.WriteAllText(saveBash.FileName, content, new UTF8Encoding(false));
             }
             catch (Exception ex)
             {
                 MessageBox.Show(
                     $"Failed to write script:\n{ex.Message}",
-                    "Error Saving File",
+                    "Error",
                     MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
+                    MessageBoxIcon.Error);
             }
         }
+
         private void msMainSettings_Click(object sender, EventArgs e)
         {
             using var dlg = new Settings();
@@ -326,7 +321,7 @@ namespace EchoDrop
         public void getDefaultDirectory()
         {
             string decodedFilesDir = "Decoded Files";
-            string programDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            string programDirectory = AppContext.BaseDirectory;
             //Directory.CreateDirectory(Path.Combine(programDirectory, decodedFilesDir));
             outputDirectory = Path.Combine(programDirectory, decodedFilesDir, outputDirectoryName);
             int dirSuffix = 1;
@@ -530,6 +525,18 @@ namespace EchoDrop
             using var stream = File.OpenRead(filePath);
             byte[] hash = sha256.ComputeHash(stream);
             return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+        }
+
+        private void MainED_Load(object sender, EventArgs e)
+        {
+            try
+            {
+                // your load logic here
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Form Load crash:\n" + ex, "Startup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
     }
 }

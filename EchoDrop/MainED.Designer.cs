@@ -60,7 +60,7 @@
             panelFileBlocks.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             panelFileBlocks.AutoScroll = true;
             panelFileBlocks.BackColor = SystemColors.ActiveCaptionText;
-            panelFileBlocks.BackgroundImage = (Image)resources.GetObject("panelFileBlocks.BackgroundImage");
+            panelFileBlocks.BackgroundImage = Properties.Resources.EchoDrop___Logo;
             panelFileBlocks.BackgroundImageLayout = ImageLayout.Zoom;
             panelFileBlocks.Location = new Point(12, 29);
             panelFileBlocks.Name = "panelFileBlocks";
@@ -85,26 +85,26 @@
             // msMainSettings
             // 
             msMainSettings.Name = "msMainSettings";
-            msMainSettings.Size = new Size(180, 22);
+            msMainSettings.Size = new Size(181, 22);
             msMainSettings.Text = "Settings Menu";
             msMainSettings.Click += msMainSettings_Click;
             // 
             // toolStripSeparator1
             // 
             toolStripSeparator1.Name = "toolStripSeparator1";
-            toolStripSeparator1.Size = new Size(177, 6);
+            toolStripSeparator1.Size = new Size(178, 6);
             // 
             // msMainGenerateBash
             // 
             msMainGenerateBash.Name = "msMainGenerateBash";
-            msMainGenerateBash.Size = new Size(180, 22);
+            msMainGenerateBash.Size = new Size(181, 22);
             msMainGenerateBash.Text = "Generate Linux Bash";
             msMainGenerateBash.Click += msMainGenerateBash_Click;
             // 
             // selectConsoleLogToolStripMenuItem
             // 
             selectConsoleLogToolStripMenuItem.Name = "selectConsoleLogToolStripMenuItem";
-            selectConsoleLogToolStripMenuItem.Size = new Size(180, 22);
+            selectConsoleLogToolStripMenuItem.Size = new Size(181, 22);
             selectConsoleLogToolStripMenuItem.Text = "Select Console Log";
             selectConsoleLogToolStripMenuItem.Click += selectConsoleLogToolStripMenuItem_Click;
             // 
@@ -122,6 +122,7 @@
             Name = "MainED";
             SizeGripStyle = SizeGripStyle.Hide;
             Text = "EchoDrop";
+            Load += MainED_Load;
             msMain.ResumeLayout(false);
             msMain.PerformLayout();
             ResumeLayout(false);

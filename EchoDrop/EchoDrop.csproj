@@ -6,18 +6,17 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>AdditionalResources\EchoDrop - Icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <None Remove="AdditionalResources\EchoDrop - Icon.ico" />
-    <None Remove="AdditionalResources\EchoDrop - Logo.png" />
-    <None Remove="AdditionalResources\echodroptx.sh" />
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="AdditionalResources\EchoDrop - Icon.ico" />
-    <EmbeddedResource Include="AdditionalResources\EchoDrop - Logo.png" />
-    <EmbeddedResource Include="AdditionalResources\echodroptx.sh" />
+    <Content Include="AdditionalResources\EchoDrop - Icon.ico">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
@@ -33,6 +32,15 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="AdditionalResources\EchoDrop - Logo.png">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
+    <None Update="AdditionalResources\echodroptx.sh">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

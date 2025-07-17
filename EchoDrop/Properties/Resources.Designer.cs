@@ -59,5 +59,25 @@ namespace EchoDrop.Properties {
                 resourceCulture = value;
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap EchoDrop___Logo {
+            get {
+                object obj = ResourceManager.GetObject("EchoDrop - Logo", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized resource of type System.Byte[].
+        /// </summary>
+        internal static byte[] echodroptx {
+            get {
+                object obj = ResourceManager.GetObject("echodroptx", resourceCulture);
+                return ((byte[])(obj));
+            }
+        }
     }
 }
